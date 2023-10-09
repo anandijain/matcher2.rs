@@ -65,7 +65,6 @@ impl Expr {
 /// for now we assume patterns aren't named, and only blank exists
 fn is_match(ex: &Expr, pat: &Expr) -> bool {
     match (ex, pat) {
-        (_, Expr::Sym(_)) => return ex == pat,
         (_, Expr::List(ps)) => {
             let p_head = head(pat);
             if p_head == sym("blank") {
@@ -94,24 +93,14 @@ fn is_match(ex: &Expr, pat: &Expr) -> bool {
                 _ => unreachable!(),
             }
         }
+        _ => return ex == pat,
     }
 }
 
 fn main() {
-    // let tups = vec![
-    //     ("f", "(blank)", true),
-    //     ("f", "(blank Sym)", true),
-    //     ("(f)", "(blank)", true),
-    //     ("(f)", "(blank f)", true),
-    //     ("(f a)", "(blank)", true),
-    //     ("(f a)", "((blank) (blank))", true),
-    //     ("(f a b)", "((blank) (blank))", false),
-    // ];
-    // for (ex, pat) in tups {
-    //     println!("{} | {}", ex, pat);
-    //     println!("{}", is_match(&parse(ex), &parse(pat)));
-    // }
+
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,7 +118,13 @@ mod tests {
         ];
 
         for (ex, pat, expected) in test_cases {
-            assert_eq!(is_match(&parse(ex), &parse(pat)), expected, "Failed on example: {} | {}", ex, pat);
+            assert_eq!(
+                is_match(&parse(ex), &parse(pat)),
+                expected,
+                "Failed on example: {} | {}",
+                ex,
+                pat
+            );
         }
     }
 }
