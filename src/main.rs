@@ -69,7 +69,7 @@ fn is_match(ex: &Expr, pat: &Expr) -> bool {
         (_, Expr::List(ps)) => {
             let p_head = head(pat);
             if p_head == sym("blank") {
-                if pat.length() == 1 {
+                if ps.len() == 2 {
                     if ps[1] == head(ex) {
                         return true;
                     } else {
@@ -98,17 +98,38 @@ fn is_match(ex: &Expr, pat: &Expr) -> bool {
 }
 
 fn main() {
-    let tups = vec![
-        ("f", "(blank)"),
-        ("f", "(blank Sym)"),
-        ("(f)", "(blank)"),
-        ("(f)", "(blank f)"),
-        ("(f a)", "(blank)"),
-        ("(f a)", "((blank) (blank))"),
-        ("(f a b)", "((blank) (blank))"),
-    ];
-    for (ex, pat) in tups {
-        println!("{} | {}", ex, pat);
-        println!("{}", is_match(&parse(ex), &parse(pat)));
+    // let tups = vec![
+    //     ("f", "(blank)", true),
+    //     ("f", "(blank Sym)", true),
+    //     ("(f)", "(blank)", true),
+    //     ("(f)", "(blank f)", true),
+    //     ("(f a)", "(blank)", true),
+    //     ("(f a)", "((blank) (blank))", true),
+    //     ("(f a b)", "((blank) (blank))", false),
+    // ];
+    // for (ex, pat) in tups {
+    //     println!("{} | {}", ex, pat);
+    //     println!("{}", is_match(&parse(ex), &parse(pat)));
+    // }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_match() {
+        let test_cases = vec![
+            ("f", "(blank)", true),
+            ("f", "(blank Sym)", true),
+            ("(f)", "(blank)", true),
+            ("(f)", "(blank f)", true),
+            ("(f a)", "(blank)", true),
+            ("(f a)", "((blank) (blank))", true),
+            ("(f a b)", "((blank) (blank))", false),
+        ];
+
+        for (ex, pat, expected) in test_cases {
+            assert_eq!(is_match(&parse(ex), &parse(pat)), expected, "Failed on example: {} | {}", ex, pat);
+        }
     }
 }
