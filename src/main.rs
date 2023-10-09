@@ -67,11 +67,19 @@ fn is_match(ex: &Expr, pat: &Expr) -> bool {
     match (ex, pat) {
         (_, Expr::Sym(_)) => return ex == pat,
         (_, Expr::List(ps)) => {
-            if ps[0] == sym("blank") {
+            let p_head = head(pat);
+            if p_head == sym("blank") {
+                if pat.length() == 1 {
+                    if ps[1] == head(ex) {
+                        return true;
+                    } else {
+                        return false;
+                    }
+                }
                 return true;
             }
             // this handles the ex sym case becase otherwise we should have gone to the pat sym arm above
-            if ex.length() != pat.length() { 
+            if ex.length() != pat.length() {
                 return false;
             }
             match ex {
@@ -83,8 +91,7 @@ fn is_match(ex: &Expr, pat: &Expr) -> bool {
                     }
                     return true;
                 }
-                _ => unreachable!()
-
+                _ => unreachable!(),
             }
         }
     }
@@ -93,7 +100,9 @@ fn is_match(ex: &Expr, pat: &Expr) -> bool {
 fn main() {
     let tups = vec![
         ("f", "(blank)"),
+        ("f", "(blank Sym)"),
         ("(f)", "(blank)"),
+        ("(f)", "(blank f)"),
         ("(f a)", "(blank)"),
         ("(f a)", "((blank) (blank))"),
         ("(f a b)", "((blank) (blank))"),
