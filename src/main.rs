@@ -42,6 +42,9 @@ fn sym(name: &str) -> Expr {
 }
 
 fn list(exprs: Vec<Expr>) -> Expr {
+    if exprs.is_empty() {
+        panic!("Attempted to create a headless list");
+    }
     Expr::List(exprs)
 }
 
@@ -60,27 +63,50 @@ impl Expr {
             Expr::List(lst) => lst.len().saturating_sub(1),
         }
     }
+    fn as_list(&self) -> Option<&Vec<Expr>> {
+        if let Expr::List(lst) = self {
+            Some(lst)
+        } else {
+            None
+        }
+    }
 }
 
 /// for now we assume patterns aren't named, and only blank exists
 fn is_match(ex: &Expr, pat: &Expr) -> bool {
+    println!("is_match: {} | {}", ex, pat);
     match (ex, pat) {
         (_, Expr::List(ps)) => {
             let p_head = head(pat);
+
             if p_head == sym("blank") {
-                if ps.len() == 2 {
-                    if ps[1] == head(ex) {
-                        return true;
-                    } else {
-                        return false;
+                if ps.len() == 2 && ps[1] == head(ex) {
+                    return true;
+                }
+                return ps.len() == 1;
+            }
+
+            if p_head == sym("blank_sequence") {
+                if ps.len() == 1 {
+                    return true;
+                }
+                if let Some(sublist) = ex.as_list() {
+                    for i in 0..=sublist.len() {
+                        if is_match(
+                            &Expr::List(sublist[i..].to_vec()),
+                            &Expr::List(ps[1..].to_vec()),
+                        ) {
+                            return true;
+                        }
                     }
                 }
-                return true;
-            }
-            // this handles the ex sym case becase otherwise we should have gone to the pat sym arm above
-            if ex.length() != pat.length() {
                 return false;
             }
+
+            // if ex.length() != pat.length() {
+            //     return false;
+            // }
+
             match ex {
                 Expr::List(es) => {
                     for (e, p) in es.iter().zip(ps.iter()) {
@@ -97,9 +123,7 @@ fn is_match(ex: &Expr, pat: &Expr) -> bool {
     }
 }
 
-fn main() {
-
-}
+fn main() {}
 
 #[cfg(test)]
 mod tests {
@@ -111,17 +135,24 @@ mod tests {
             ("f", "(blank)", true),
             ("f", "(blank Sym)", true),
             ("(f)", "(blank)", true),
+            ("(f)", "(f)", true),
             ("(f)", "(blank f)", true),
             ("(f a)", "(blank)", true),
             ("(f a)", "((blank) (blank))", true),
             ("(f a b)", "((blank) (blank))", false),
+            ("f", "(blank_sequence)", true),
+            ("(f a)", "(blank_sequence)", true),
+            ("(f a)", "(f (blank_sequence))", true),
+            ("(f a b c)", "(f (blank_sequence))", true),
         ];
 
-        for (ex, pat, expected) in test_cases {
+        for (i, (ex, pat, expected)) in test_cases.iter().enumerate() {
+            println!("{}: {} | {}", i, ex, pat);
             assert_eq!(
                 is_match(&parse(ex), &parse(pat)),
-                expected,
-                "Failed on example: {} | {}",
+                *expected,
+                "Failed on example: {}: {} | {}",
+                i,
                 ex,
                 pat
             );
