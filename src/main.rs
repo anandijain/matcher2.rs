@@ -113,7 +113,6 @@ pub fn rebuild_all(expr: Expr, map: &HashMap<Expr, Expr>) -> Expr {
     }
 }
 
-
 fn splice_sequences(expr: Expr) -> Expr {
     match expr {
         Expr::Sym(_) => expr,
@@ -151,6 +150,7 @@ fn splice_sequences(expr: Expr) -> Expr {
 /// where we return the new rules that were added to the map in case they need to be reverted up above
 ///
 pub fn get_match(ex: &Expr, pat: &Expr, mut map: &mut HashMap<Expr, Expr>) -> bool {
+    println!("get_match: {} | {} with map {:?}", ex, pat, map);
     match ex {
         Expr::Sym(e) => match pat {
             Expr::Sym(p) => return e == p,
@@ -280,7 +280,7 @@ pub fn get_match(ex: &Expr, pat: &Expr, mut map: &mut HashMap<Expr, Expr>) -> bo
                                     // todo!
                                     // i think this means the sequence should be i..i+j
                                     let mut seq = parse("(sequence)");
-                                    for k in i..i + j {
+                                    for k in i..=i + j {
                                         seq.push(e_rest[k].clone());
                                     }
                                     println!("seq: {}", seq);
@@ -336,7 +336,9 @@ pub fn get_match(ex: &Expr, pat: &Expr, mut map: &mut HashMap<Expr, Expr>) -> bo
                         }
                     }
                     // return true;
-                    let new_ex = rebuild_all(pat.clone(), map);
+                    let mut new_ex = rebuild_all(pat.clone(), map);
+                    new_ex = splice_sequences(new_ex);
+
                     if new_ex == *ex {
                         return true;
                     } else {
@@ -350,29 +352,29 @@ pub fn get_match(ex: &Expr, pat: &Expr, mut map: &mut HashMap<Expr, Expr>) -> bo
 }
 
 fn main() {
- let expr = Expr::List(vec![
+    let expr = Expr::List(vec![
         Expr::Sym("f".to_string()),
         Expr::List(vec![
             Expr::Sym("g".to_string()),
             Expr::List(vec![
                 Expr::Sym("sequence".to_string()),
                 Expr::Sym("x".to_string()),
-                Expr::Sym("y".to_string())
+                Expr::Sym("y".to_string()),
             ]),
-            Expr::Sym("z".to_string())
+            Expr::Sym("z".to_string()),
         ]),
         Expr::List(vec![
             Expr::Sym("sequence".to_string()),
             Expr::Sym("a".to_string()),
-            Expr::Sym("b".to_string())
+            Expr::Sym("b".to_string()),
         ]),
-        Expr::Sym("c".to_string())
+        Expr::Sym("c".to_string()),
     ]);
 
     let new_expr = splice_sequences(expr);
     println!("{:?}", new_expr);
 
-        let expr = Expr::List(vec![
+    let expr = Expr::List(vec![
         Expr::Sym("f".to_string()),
         Expr::List(vec![
             Expr::Sym("g".to_string()),
@@ -382,12 +384,12 @@ fn main() {
                 Expr::List(vec![
                     Expr::Sym("sequence".to_string()),
                     Expr::Sym("y1".to_string()),
-                    Expr::Sym("y2".to_string())
+                    Expr::Sym("y2".to_string()),
                 ]),
-                Expr::Sym("z".to_string())
-            ])
+                Expr::Sym("z".to_string()),
+            ]),
         ]),
-        Expr::Sym("h".to_string())
+        Expr::Sym("h".to_string()),
     ]);
 
     let new_expr = splice_sequences(expr);
@@ -411,7 +413,9 @@ mod tests {
             // ("(f a b)", "(pattern x (blank))", true),
             // ("(f a)", "(f (pattern x (blank)))", true),
             // ("(f a)", "(f (pattern x (blank)))", true),
-            ("(f a b)", "(f (pattern x (blank_sequence)))", true),
+            ("(f a b c)", "(f (pattern x (blank_sequence)))", true),
+            ("(f a b (f a b))", "(f (pattern x (blank_sequence)) (f (pattern x (blank_sequence))))", true),
+            ("(f a b c a b)", "(f (pattern x (blank_sequence)) (pattern y (blank)) (pattern x (blank_sequence)))", true),
             // ("(f a)", "(f (pattern x (blank)))", true),
 
             // ("f", "(blank)", true),
