@@ -304,6 +304,36 @@ pub fn get_match(ex: &Expr, pat: &Expr, mut map: &mut HashMap<Expr, Expr>) -> bo
                                         return true;
                                     }
                                 }
+                            } else if p_type == &sym("blank_null_sequence") {
+                                for j in 0..e_rest.len() {
+                                    // let e_j = &e_rest[j];
+                                    // todo!
+                                    // i think this means the sequence should be i..i+j
+                                    let mut seq = parse("(sequence)");
+                                    for k in i..=i + j {
+                                        seq.push(e_rest[k].clone());
+                                    }
+                                    println!("seq: {}", seq);
+                                    // requires lookahead to see if we need to splice a sequence in
+                                    // i think that means it needs to be done at each lookup
+                                    // into map.
+
+                                    if let Some(from_map) = map.get(p_i) {
+                                    } else {
+                                        map.insert(p_i.clone(), seq.clone());
+                                        // println!("here i am ");
+                                    } // rebuild all uses the map to rebuild the pattern up to equality with no matching
+                                    let mut rebuild_pat = rebuild_all(pat.clone(), map);
+                                    rebuild_pat = splice_sequences(rebuild_pat);
+                                    println!("rebuild_pat: {}", rebuild_pat);
+
+                                    let m = get_match(ex, &rebuild_pat, map);
+                                    if !m {
+                                        map.remove(p_i);
+                                    } else {
+                                        return true;
+                                    }
+                                }
                             } else if p_type == &sym("blank") {
                                 //     if let Some(from_map) = map.get(p_i) {
                                 //     } else {
@@ -414,8 +444,26 @@ mod tests {
             ("(f a)", "(f (pattern x (blank)))", true),
             ("(f a)", "(f (pattern x (blank)))", true),
             ("(f a b c)", "(f (pattern x (blank_sequence)))", true),
-            ("(f a b (f a b))", "(f (pattern x (blank_sequence)) (f (pattern x (blank_sequence))))", true),
-            ("(f a b c a b)", "(f (pattern x (blank_sequence)) (pattern y (blank)) (pattern x (blank_sequence)))", true),
+            (
+                "(f a b (f a b))",
+                "(f (pattern x (blank_sequence)) (f (pattern x (blank_sequence))))",
+                true,
+            ),
+            (
+                "(f a b c a b)",
+                "(f (pattern x (blank_sequence)) (pattern y (blank)) (pattern x (blank_sequence)))",
+                true,
+            ),
+            (
+                "(f a b c a b)",
+                "(pattern x (blank_null_sequence))",
+                true,
+            ),
+            (
+                "(f a b c a b)",
+                "(f (pattern x (blank_null_sequence)) (pattern y (blank_sequence)))",
+                true,
+            ),
             // ("(f a)", "(f (pattern x (blank)))", true),
 
             // ("f", "(blank)", true),
