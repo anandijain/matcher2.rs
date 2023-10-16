@@ -173,6 +173,7 @@ fn splice_sequences(expr: Expr) -> Expr {
 /// where we return the new rules that were added to the map in case they need to be reverted up above
 /// the questions is what happens for unnamed blanks i think we need to keep track of unnamed blanks with
 /// a position or something because i think we might need it?
+/// DOES NOT SUPPORT UNNAMED PATTERNS, NO POSITION TRACKING DURING TRAVERSAL
 pub fn get_match(ex: &Expr, pat: &Expr, mut map: &mut HashMap<Expr, Expr>) -> bool {
     let mut tmp_map = map.clone();
     println!("get_match: {} | {} with map {:?}", ex, pat, map);
@@ -186,16 +187,36 @@ pub fn get_match(ex: &Expr, pat: &Expr, mut map: &mut HashMap<Expr, Expr>) -> bo
                     // (mq f (pattern x (blank)))
                     Expr::Sym(p) => {
                         if p == "pattern" {
+                            // a sym, pattern match is always true for my supported pattern objects
+
                             let p_name = &ps[1];
                             // let p_type = &ps[2][0];
 
                             if let Some(from_map) = map.get(pat) {
                                 return from_map == ex;
                             } else {
+                                if ps[2].len() == 2 {
+                                    let b_head = &ps[2][1];
+                                    if b_head != &head(ex) {
+                                        return false;
+                                    }
+                                }
                                 println!("inserting {:?} -> {:?}", pat, ex);
                                 map.insert(pat.clone(), ex.clone());
                                 return true;
                             }
+                        } else if p == "blank"
+                            || p == "blank_sequence"
+                            || p == "blank_null_sequence"
+                        // we'll need to split this out i think
+                        {
+                            if ps.len() == 2 {
+                                let b_head = &ps[1];
+                                if b_head != &head(ex) {
+                                    return false;
+                                }
+                            }
+                            return true;
                         } else {
                             // this would be like the case (mq f (f))
                             return false;
@@ -219,18 +240,36 @@ pub fn get_match(ex: &Expr, pat: &Expr, mut map: &mut HashMap<Expr, Expr>) -> bo
                     match p_head {
                         // This is the (mq (f) (f)) (true)
                         Expr::Sym(_) => {
-                            // this seems like the case where we are matching the whole list to a pattern
+                            // this seems like the case where we are matching the whole list to a pattern or blank
                             if p_head == &sym("pattern") {
                                 // (mq (f a b) (pattern x (blank))) (true x-> (f a b))
                                 // any pattern object that im planning to support should pass here
+                                // isn't it possible that map.get returns a pattern? in which case we actually need to recurse here?
                                 if let Some(from_map) = map.get(pat) {
                                     return from_map == ex;
                                 } else {
+                                    if ps[2].len() == 2 {
+                                        let b_head = &ps[2][1];
+                                        if b_head != &head(ex) {
+                                            return false;
+                                        }
+                                    }
                                     map.insert(pat.clone(), ex.clone());
                                     // println!("here i am ");
 
                                     return true;
                                 }
+                            } else if p_head == &sym("blank") {
+                                if ps.len() == 2 {
+                                    let b_head = &ps[1];
+                                    if b_head != &head(ex) {
+                                        return false;
+                                    }
+                                }
+                                return true;
+
+                            // } else if head(p_i) == sym("blank_sequence") {
+                            // } else if head(p_i) == sym("blank_null_sequence") {
                             } else {
                                 if !get_match(&head(ex), p_head, map) {
                                     return false;
@@ -239,56 +278,24 @@ pub fn get_match(ex: &Expr, pat: &Expr, mut map: &mut HashMap<Expr, Expr>) -> bo
                         }
                         // This is the (mq () (())) (true)
                         Expr::List(head_ps) => {
-                            // so the general strat from my notes is first we need to handle matching the heads
-                            // because we are in the case where pat is List and the head of pat is list
-                            // so that means that we need to make sure that the p_head can match no more than the head of the ex
-                            // only then can we start to figure out how long the blank_sequences need to be
-
-                            // the reason why i think i might need to conditionally accept the changes to the bindings map
-                            // is that if we are in recursion and we return false, then i think we need to undo this up above somehow
-                            // maybe this is only an issue when we are doing the blank_sequence stuff
-                            // because there you actually do need to revert a bad guess
-                            // or at least overwrite it
-
-                            // pat is ((pattern x (blank))) and ex is (f a b)
-                            // let mut tmp_map = map.clone();
-
                             if !get_match(&head(ex), &head(pat), &mut map) {
                                 return false;
                             }
-                            // else {
-                            //     map = &mut tmp_map;
-                            // }
                         }
                     }
 
-                    // we've already made sure the head matches
-                    // so ie we had (mq (f a b), (f (pattern x (blank_sequence))))
-                    // at this point we've already checked that f<->f
-                    // i = 0, p_i = (pattern x (blank_sequence))
                     for (i, p_i) in p_rest.iter().enumerate() {
                         println!("i: {i} | p_i: {}", p_i);
                         if head(p_i) == sym("pattern") {
                             let p_type = &p_i.as_list().unwrap()[2].as_list().unwrap()[0];
                             let p_name = &p_i.as_list().unwrap()[1];
                             if p_type == &sym("blank_sequence") {
-                                // is i..e_rest.len() correct?
-                                //
-                                // j represents the number of exprs in e_rest that the blank_sequence matches
-                                // blank_sequences matches a minimum of 1
                                 for j in 1..=e_rest.len() {
-                                    // let e_j = &e_rest[j];
-                                    // todo!
-                                    // i think this means the sequence should be i..i+j
                                     let mut seq = parse("(sequence)");
                                     for k in i..i + j {
                                         seq.push(e_rest[k].clone());
                                     }
                                     println!("seq {p_name}: {}", seq);
-                                    // requires lookahead to see if we need to splice a sequence in
-                                    // i think that means it needs to be done at each lookup
-                                    // into map.
-
                                     if let Some(from_map) = map.get(p_i) {
                                     } else {
                                         map.insert(p_i.clone(), seq.clone());
@@ -330,16 +337,6 @@ pub fn get_match(ex: &Expr, pat: &Expr, mut map: &mut HashMap<Expr, Expr>) -> bo
                                     }
                                 }
                             } else if p_type == &sym("blank") {
-                                //     if let Some(from_map) = map.get(p_i) {
-                                //     } else {
-                                //         map.insert(p_i.clone(), e_i.clone());
-                                //         // println!("here i am ");
-                                //     } // rebuild all uses the map to rebuild the pattern up to equality with no matching
-                                //     let rebuild_pat = rebuild_all(pat.clone(), map);
-
-                                //     // in this case we're look at a non List<>Pat case meaning
-                                //     // this blank is going to (possibly) match a single expr in the arguments to `ex``
-                                // ex
                                 if i > e_rest.len() {
                                     return false;
                                 }
@@ -360,11 +357,16 @@ pub fn get_match(ex: &Expr, pat: &Expr, mut map: &mut HashMap<Expr, Expr>) -> bo
                                 }
                             }
                             // end pattern case
-                        } else {
-                            // we cant just take [i] becuase we need to know
-                            // actually i think we can take [i] because we will have recursed in the build_sequence and rebuilt the
-                            // ex
+                        } else if head(p_i) == sym("blank") {
+                            let e_i = &e_rest[i];
 
+                            if !get_match(e_i, p_i, map) {
+                                return false;
+                            }
+
+                        // } else if head(p_i) == sym("blank_sequence") {
+                        // } else if head(p_i) == sym("blank_null_sequence") {
+                        } else {
                             println!("p_rest: {:?}", p_rest);
                             println!("e_rest: {:?}", e_rest);
                             if i >= e_rest.len() {
@@ -373,26 +375,19 @@ pub fn get_match(ex: &Expr, pat: &Expr, mut map: &mut HashMap<Expr, Expr>) -> bo
                             let e_i = &e_rest[i];
 
                             let m = get_match(e_i, p_i, map);
-                            // println!("{}: {} | {} with map {:?}", i, e_i, p_i, map);
-                            // let mut rebuild_pat = rebuild_all(pat.clone(), map);
-                            // rebuild_pat = splice_sequences(rebuild_pat);
-                            // let m = get_match(ex, &rebuild_pat, map);
                             if !m {
                                 map.remove(p_i);
                                 return false;
                             }
                         }
                     }
-                    // return true;
                     let mut new_ex = rebuild_all(pat.clone(), map);
                     new_ex = splice_sequences(new_ex);
-
                     if new_ex == *ex {
                         return true;
                     } else {
                         return false;
                     }
-                    // if ps[0]
                 }
             }
         }
@@ -461,16 +456,29 @@ mod tests {
                 "(f (pattern x (blank_sequence)) (pattern y (blank_sequence)))",
                 true,
             ),
-            // ("(f a)", "(f (pattern x (blank)))", true),
+            // head blanks
+            ("f", "(pattern x (blank Sym))", true),
+            ("(f)", "(pattern x (blank f))", true),
+            ("(f a)", "((pattern x (blank Sym)) a)", true),
+            ("((f) a)", "((pattern x (blank f)) a)", true),
+            // ("(a b (c d))", "((pattern x (blank_sequence Sym)) (c d))", true),
 
+            // unnamed blanks
             // ("f", "(blank)", true),
             // ("f", "(blank Sym)", true),
             // ("(f)", "(blank)", true),
-            // ("(f)", "(f)", true),
             // ("(f)", "(blank f)", true),
-            // ("(f a)", "(blank)", true),
-            // ("(f a)", "((blank) (blank))", true),
-            // ("(f a b)", "((blank) (blank))", false),
+            // ("(f a b c)", "(f (blank_sequence))", true),
+
+            // ("(f a)", "(f (pattern x (blank)))", true),
+            ("f", "(blank)", true),
+            ("f", "(blank Sym)", true),
+            ("(f)", "(blank)", true),
+            ("(f)", "(f)", true),
+            ("(f)", "(blank f)", true),
+            ("(f a)", "(blank)", true),
+            ("(f a)", "((blank) (blank))", true),
+            ("(f a b)", "((blank) (blank))", false),
             // ("f", "(blank_sequence)", true),
             // ("(f a)", "(blank_sequence)", true),
             // ("(f a)", "(f (blank_sequence))", true),
